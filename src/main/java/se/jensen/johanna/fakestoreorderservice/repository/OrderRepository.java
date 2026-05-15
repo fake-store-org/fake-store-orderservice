@@ -12,4 +12,5 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
   @EntityGraph(attributePaths = "orderItems")
   Optional<Order> findByStripeSessionId(String stripeSessionId);
 
+  Boolean existsByStripeSessionId(String stripeSessionId);
 }

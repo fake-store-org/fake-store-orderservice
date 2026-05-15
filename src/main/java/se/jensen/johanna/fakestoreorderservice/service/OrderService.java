@@ -23,6 +23,7 @@ import se.jensen.johanna.fakestoreorderservice.dto.StripeEventDTO;
 import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
+import se.jensen.johanna.fakestoreorderservice.messaging.OrderEventPublisher;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
@@ -44,6 +45,7 @@ public class OrderService {
   private final AddressMapper addressMapper;
   private final RestTemplate restTemplate;
   private final PaymentService paymentService;
+  private final OrderEventPublisher orderEventPublisher;
 
 
   @Transactional
@@ -125,22 +127,31 @@ public class OrderService {
     }
   }
 
+
+  /**
+   * Triggered by SQS listener
+   */
   @Transactional
   public void handlePaidOrder(StripeEventDTO stripeEvent) {
+    String stripeSessionId = stripeEvent.detail().data().stripeObject().sessionId();
     log.info("Handling paid order: {} stripe session: {}",
         stripeEvent.detail().data().stripeObject().metadata().orderId(),
-        stripeEvent.detail().data().stripeObject().sessionId());
-    Order order = orderRepository.findByStripeSessionId(
-        stripeEvent.detail().data().stripeObject().sessionId()).orElseThrow(() -> {
+        stripeSessionId);
+    Order order = orderRepository.findByStripeSessionId(stripeSessionId).orElseThrow(() -> {
       log.error("Order for stripe session id: {} not found",
-          stripeEvent.detail().data().stripeObject().sessionId());
+          stripeSessionId);
       return new DomainStateException("Unable to process order.");
     });
     order.confirmPaidOrder();
     orderRepository.save(order);
     log.info("Order {} confirmed paid", order.getOrderId());
 
+    log.info("Begin to publish confirm reservation event. OrderId: {} ReservationId: {}",
+        order.getOrderId(), order.getReservationId());
+    orderEventPublisher.publishConfirmReservationEvent(order.getReservationId());
   }
+
+
 }
 
 
