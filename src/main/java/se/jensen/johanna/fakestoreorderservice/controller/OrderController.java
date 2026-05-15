@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
 import se.jensen.johanna.fakestoreorderservice.service.OrderService;
-import se.jensen.johanna.fakestoreorderservice.service.WebhookService;
 
 @RestController
 @RequestMapping("/api/orders")
@@ -21,7 +20,6 @@ import se.jensen.johanna.fakestoreorderservice.service.WebhookService;
 public class OrderController {
 
   private final OrderService orderService;
-  private final WebhookService webhookService;
 
   @PostMapping("/order")
   public ResponseEntity<CheckoutResponse> order(@AuthenticationPrincipal Jwt jwt,
