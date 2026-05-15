@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import se.jensen.johanna.fakestoreorderservice.dto.StripeEventDTO;
-import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
+import se.jensen.johanna.fakestoreorderservice.repository.OrderRepository;
 import se.jensen.johanna.fakestoreorderservice.service.OrderService;
 
 @Slf4j
@@ -14,13 +14,26 @@ import se.jensen.johanna.fakestoreorderservice.service.OrderService;
 public class StripeListener {
 
   private final OrderService orderService;
+  private final OrderRepository orderRepository;
 
 
-  @SqsListener("${app.queues.order-events}")
-  public void handleStripeEvent(StripeEventDTO stripeEvent) {
+  /**
+   * Listens to successfully paid stripe-events.
+   *
+   * @param stripeEvent
+   */
+  @SqsListener("${app.queues.order-paid-events}")
+  public void handlePaymentStatusPaid(StripeEventDTO stripeEvent) {
+    log.info("Received stripe event: {}", stripeEvent);
     if (stripeEvent == null) {
-      log.error("Stripe event is null");
-      throw new DomainStateException("Unable to process order.");
+      log.warn("Stripe event is null");
+      return;
+    }
+    if (!orderRepository.existsByStripeSessionId(
+        stripeEvent.detail().data().stripeObject().sessionId())) {
+      log.warn("Order not found for stripe session id: {}",
+          stripeEvent.detail().data().stripeObject().sessionId());
+      return;
     }
     orderService.handlePaidOrder(stripeEvent);
 
