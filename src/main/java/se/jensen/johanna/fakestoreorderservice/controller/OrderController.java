@@ -24,9 +24,7 @@ public class OrderController {
   @PostMapping("/order")
   public ResponseEntity<CheckoutResponse> order(@AuthenticationPrincipal Jwt jwt,
       @RequestBody @Valid OrderRequest orderRequest) {
-
     return ResponseEntity.status(HttpStatus.CREATED).body(orderService.putOrder(jwt, orderRequest));
-
   }
 
 }
