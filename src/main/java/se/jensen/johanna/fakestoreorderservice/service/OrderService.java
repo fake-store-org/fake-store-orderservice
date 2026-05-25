@@ -4,21 +4,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
+import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.dto.ReservationRequest;
-import se.jensen.johanna.fakestoreorderservice.dto.ReservationResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.StripeEventDTO;
 import se.jensen.johanna.fakestoreorderservice.exception.DomainStateException;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
@@ -47,95 +47,98 @@ public class OrderService {
   private final PaymentService paymentService;
   private final OrderEventPublisher orderEventPublisher;
 
+  /**
+   * Creates an order with status PENDING. Retrieves cart items from product-service and reserves
+   * the cart in inventory. Creates and returns a checkout session for stripe payment
+   *
+   * @param jwt     token
+   * @param request set containing id of products and quantity
+   * @return CheckoutResponse containing stripe url for payment
+   */
 
-  @Transactional
   public CheckoutResponse putOrder(Jwt jwt, OrderRequest request) {
-    log.info("Creating order for user {}", jwt.getSubject());
-    UUID reservationId = reserveOrderItems(jwt, request.itemRequests());
+    log.info("Creating order for user {}. request {}...", jwt.getSubject(), request);
+
     UUID buyerId = UUID.fromString(jwt.getSubject());
     String email = jwt.getClaimAsString("email");
-    List<OrderItem> orderItems = getOrderItems(request.itemRequests());
+    Set<UUID> productIds = request.itemRequests().stream().map(CartItemRequest::productId)
+        .collect(Collectors.toSet());
+    List<ProductDTO> products = fetchCartProducts(productIds);
+    List<OrderItem> orderItems = mapOrderItems(products, request.itemRequests());
     ShippingAddress shippingAddress = addressMapper.toShippingAddress(request.addressRequest());
-    Order pendingOrder = Order.create(buyerId, orderItems, shippingAddress, reservationId);
+    Order pendingOrder = Order.create(buyerId, orderItems, shippingAddress);
     orderRepository.save(pendingOrder);
-
-    log.info("Creating checkout session for order {}", pendingOrder.getOrderId());
+    log.info("Pending Order {} created. Reserving order items...", pendingOrder.getOrderId());
+    reserveOrderItems(new ReservationRequest(request.itemRequests(), pendingOrder.getOrderId()));
+    log.info("Creating checkout session for order {}...", pendingOrder.getOrderId());
     return paymentService.createCheckoutSession(pendingOrder, email);
 
   }
 
-  public UUID reserveOrderItems(Jwt jwt, Set<CartItemRequest> itemRequests) {
-    HttpHeaders headers = new HttpHeaders();
-    headers.setBearerAuth(jwt.getTokenValue());
-    HttpEntity<ReservationRequest> entity = new HttpEntity<>(new ReservationRequest(itemRequests),
-        headers);
-    ReservationResponse reservationResponse = restTemplate.postForObject(
-        inventoryServiceUrl + "/reservations/reserve-cart", entity, ReservationResponse.class
-    );
-    //Don't do this 
-    if (reservationResponse == null) {
-      log.error("Unable to reserve order items from {}",
-          inventoryServiceUrl + "/reservations/reserve-cart");
+  /**
+   * Sends reservation request to inventory
+   *
+   * @param reservationRequest Set of product id-quantity and order id to track reservation
+   */
+  public void reserveOrderItems(ReservationRequest reservationRequest) {
+    log.info("Reserving order items {} for order {}...", reservationRequest.cartItemRequests(),
+        reservationRequest.orderId());
+    HttpEntity<ReservationRequest> entity = new HttpEntity<>(reservationRequest);
+    try {
+      log.debug("Sending reservation request {} to inventory url {}", entity, inventoryServiceUrl);
+      restTemplate.postForEntity(
+          inventoryServiceUrl + "/reservations/reserve-cart", entity, Void.class
+      );
+    } catch (HttpStatusCodeException e) {
+      log.error("Unable to reserve order items from {}. status: {}", inventoryServiceUrl,
+          e.getStatusCode());
       throw new DomainStateException("Unable to process order.");
     }
-    return reservationResponse.reservationId();
+
   }
 
-
-  public List<OrderItem> getOrderItems(Set<CartItemRequest> itemRequests) {
+  public List<OrderItem> mapOrderItems(List<ProductDTO> products,
+      Set<CartItemRequest> itemRequests) {
+    log.debug("Mapping order items from cart items {}, matching product ids {}...", itemRequests,
+        products);
     List<OrderItem> orderItems = new ArrayList<>();
     for (CartItemRequest item : itemRequests) {
-      ProductDTO productDTO = restTemplate.getForObject(
-          productServiceUrl + "/products/" + item.productId(), ProductDTO.class);
+      ProductDTO productDTO = products.stream()
+          .filter(p -> p.productId().equals(item.productId())).findFirst().orElse(null);
       if (productDTO == null) {
-        log.error("Product not found {}", item.productId());
+        log.error("Matching Product not found {}", item.productId());
         throw new DomainStateException("Unable to process order.");
       }
       orderItems.add(orderItemMapper.toOrderItem(productDTO, item.quantity()));
     }
-
     return orderItems;
   }
 
-  @Transactional
-  public void confirmPaidOrder(String sessionId) {
-    if (sessionId == null) {
+  /**
+   * Retrieves all products from the cart from productservice
+   */
+  public List<ProductDTO> fetchCartProducts(Set<UUID> productIds) {
+    log.info("Fetching products from product service for productIds: {}...", productIds);
+    HttpEntity<Set<UUID>> entity = new HttpEntity<>(productIds);
+    ProductBatchResponse response = restTemplate.postForObject(
+        productServiceUrl + "/internal/products/batch", entity, ProductBatchResponse.class);
+    if (response == null || response.products() == null || response.products().isEmpty()) {
+      log.error("Unable to get products from product service");
       throw new DomainStateException("Unable to process order.");
     }
-
-    Order order = orderRepository.findByStripeSessionId(sessionId).orElseThrow(() -> {
-      log.error("Order for stripe session id: {} not found", sessionId);
-      return new DomainStateException("Unable to process order.");
-    });
-
-    order.confirmPaidOrder();
-    orderRepository.save(order);
-    commitReservation(order.getReservationId());
+    return response.products();
 
   }
-
-
-  public void commitReservation(UUID reservationId) {
-    log.info("Committing reservation {}", reservationId);
-    try {
-      restTemplate.postForObject(
-          inventoryServiceUrl + "/reservations/" + reservationId + "/reduce-stock", null,
-          Void.class);
-    } catch (Exception e) {
-      log.error("Unable to commit reservation {}", reservationId, e);
-      throw new DomainStateException("Unable to process order.");
-    }
-  }
-
 
   /**
-   * Triggered by SQS listener
+   * Triggered by SQS listener. Marks order as PAID and publishes event to confirm reservation in
+   * inventory.
    */
-  @Transactional
   public void handlePaidOrder(StripeEventDTO stripeEvent) {
     String stripeSessionId = stripeEvent.detail().data().stripeObject().sessionId();
+    UUID orderId = UUID.fromString(stripeEvent.detail().data().stripeObject().metadata().orderId());
     log.info("Handling paid order: {} stripe session: {}",
-        stripeEvent.detail().data().stripeObject().metadata().orderId(),
+        orderId,
         stripeSessionId);
     Order order = orderRepository.findByStripeSessionId(stripeSessionId).orElseThrow(() -> {
       log.error("Order for stripe session id: {} not found",
@@ -146,9 +149,9 @@ public class OrderService {
     orderRepository.save(order);
     log.info("Order {} confirmed paid", order.getOrderId());
 
-    log.info("Begin to publish confirm reservation event. OrderId: {} ReservationId: {}",
-        order.getOrderId(), order.getReservationId());
-    orderEventPublisher.publishConfirmReservationEvent(order.getReservationId());
+    log.info("Begin to publish confirm reservation event. OrderId: {} ",
+        orderId);
+    orderEventPublisher.publishConfirmReservationEvent(orderId);
   }
 
 

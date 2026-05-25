@@ -21,14 +21,17 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.client.RestTemplate;
 import se.jensen.johanna.fakestoreorderservice.dto.AddressRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.OrderRequest;
+import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
-import se.jensen.johanna.fakestoreorderservice.dto.ReservationResponse;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderMapper;
@@ -63,12 +66,7 @@ class OrderServiceTest {
   @BeforeEach
   void setUp() {
     UUID userId = UUID.randomUUID();
-    jwt = Jwt.withTokenValue("mock-token")
-        .header("alg", "none")
-        .subject(userId.toString())
-        .claim("scope", "ROLE_USER")
-        .claim("email", "johanna@example.com") // <--- Lägg till denna!
-        .build();
+    jwt = mock(Jwt.class);
 
     orderItems = new java.util.ArrayList<>();
     OrderItem orderItem = OrderItem.builder().orderItemId(UUID.randomUUID())
@@ -84,15 +82,24 @@ class OrderServiceTest {
     itemRequests.add(new CartItemRequest(UUID.randomUUID(), 2));
   }
 
+
   @Test
-  void putOrder_ShouldSuccessfullyPutOrderAndSave() {
-    // 2. Skapa testdata
+  void putOrder_ShouldSuccessfullyPutOrderAndSave2() {
+    UUID sharedProductId = UUID.randomUUID();
+    UUID buyerId = UUID.randomUUID();
+
+    when(jwt.getSubject()).thenReturn(buyerId.toString());
+    when(jwt.getClaimAsString("email")).thenReturn("test@test.com");
+
+    CartItemRequest cartItem = new CartItemRequest(sharedProductId, 2);
+    Set<CartItemRequest> itemRequests = Set.of(cartItem);
+
     AddressRequest addressRequest = new AddressRequest("firstname", "lastname", null, "streetname1",
         null, "54345", "city", "country");
     OrderRequest request = new OrderRequest(itemRequests, addressRequest);
 
-    ReservationResponse resResponse = new ReservationResponse(UUID.randomUUID());
-    ProductDTO productDto = new ProductDTO(UUID.randomUUID(), "Titel", 100, "d", "s");
+    ProductDTO productDto = new ProductDTO(sharedProductId, "Titel", 100, "d", "s");
+    ProductBatchResponse fakeResponse = new ProductBatchResponse(List.of(productDto));
 
     OrderItem realItem = OrderItem.builder()
         .pricePerItem(new BigDecimal("100.00"))
@@ -101,9 +108,13 @@ class OrderServiceTest {
         .build();
 
     when(addressMapper.toShippingAddress(any())).thenReturn(mock(ShippingAddress.class));
-    when(restTemplate.postForObject(anyString(), any(), eq(ReservationResponse.class))).thenReturn(
-        resResponse);
-    when(restTemplate.getForObject(anyString(), eq(ProductDTO.class))).thenReturn(productDto);
+
+    when(restTemplate.postForObject(anyString(), any(HttpEntity.class),
+        eq(ProductBatchResponse.class)))
+        .thenReturn(fakeResponse);
+
+    when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(Void.class)))
+        .thenReturn(new ResponseEntity<>(HttpStatus.CREATED));
 
     when(orderItemMapper.toOrderItem(any(ProductDTO.class), anyInt())).thenReturn(realItem);
 
@@ -111,7 +122,6 @@ class OrderServiceTest {
         .thenReturn(new CheckoutResponse("http://url", "123"));
 
     assertDoesNotThrow(() -> orderService.putOrder(jwt, request));
-
     verify(orderRepository, times(1)).save(any(Order.class));
   }
 

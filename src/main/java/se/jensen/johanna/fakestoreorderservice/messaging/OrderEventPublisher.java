@@ -18,12 +18,18 @@ public class OrderEventPublisher {
   private String confirmReservationQueueUrl;
 
 
-  public void publishConfirmReservationEvent(UUID reservationId) {
-    log.info("Publishing confirm reservation event for reservation id: {}...", reservationId);
-    ConfirmReservationEventDTO eventDTO = new ConfirmReservationEventDTO(reservationId);
+  /**
+   * Confirms order has been PAID and commits reservation in inventory.
+   *
+   * @param orderId order id to fetch reservation for.
+   */
+  public void publishConfirmReservationEvent(UUID orderId) {
+    log.info("Publishing confirm reservation event for order: {}...", orderId);
+    ConfirmReservationEventDTO eventDTO = new ConfirmReservationEventDTO(orderId);
 
     sqsTemplate.send(to -> to.queue(confirmReservationQueueUrl).payload(eventDTO));
-    log.info("Confirm reservation event published for reservation id: {}", reservationId);
+    log.info("Confirm reservation event published for order: {}", orderId);
   }
+
 
 }

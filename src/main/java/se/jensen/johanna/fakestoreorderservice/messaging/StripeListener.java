@@ -19,20 +19,18 @@ public class StripeListener {
 
   /**
    * Listens to successfully paid stripe-events.
-   *
-   * @param stripeEvent
    */
   @SqsListener("${app.queues.order-paid-events}")
   public void handlePaymentStatusPaid(StripeEventDTO stripeEvent) {
-    log.info("Received stripe event: {}", stripeEvent);
-    if (stripeEvent == null) {
-      log.warn("Stripe event is null");
+    log.info("Received ORDER PAID stripe event: {}", stripeEvent);
+    String sessionId = stripeEvent.detail().data().stripeObject().sessionId();
+    if (sessionId == null) {
+      log.warn("Stripe session id is null. Abort processing.");
       return;
     }
-    if (!orderRepository.existsByStripeSessionId(
-        stripeEvent.detail().data().stripeObject().sessionId())) {
-      log.warn("Order not found for stripe session id: {}",
-          stripeEvent.detail().data().stripeObject().sessionId());
+    if (!orderRepository.existsByStripeSessionId(sessionId)) {
+      log.warn("Order not found for stripe session id: {}. Abort processing.",
+          sessionId);
       return;
     }
     orderService.handlePaidOrder(stripeEvent);
