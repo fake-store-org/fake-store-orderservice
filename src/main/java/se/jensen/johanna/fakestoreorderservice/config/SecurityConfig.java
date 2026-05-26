@@ -24,8 +24,8 @@ public class SecurityConfig {
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
             .requestMatchers("/actuator/health").permitAll()
-            .requestMatchers("/actuator/**").hasRole("ADMIN")
-            .requestMatchers("/api/orders/order").hasRole("USER")
+            .requestMatchers("/actuator/**").hasAuthority("SCOPE_ROLE_ADMIN")
+            .requestMatchers("/api/orders/order").hasAuthority("SCOPE_ROLE_USER")
             .anyRequest().authenticated())
         .oauth2ResourceServer(oauth -> oauth
             .jwt(Customizer.withDefaults()));
