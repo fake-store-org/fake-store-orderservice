@@ -8,6 +8,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
@@ -40,8 +41,6 @@ public class Order {
   @NotNull
   private List<OrderItem> orderItems;
 
-  private UUID reservationId;
-
   @NotNull
   @Embedded
   private ShippingAddress shippingAddress;
@@ -55,23 +54,26 @@ public class Order {
 
   private String stripeSessionId;
 
-  @NotNull
+
   private Instant createdAt;
 
   private Instant updatedAt;
+
+  @PrePersist
+  private void onCreate() {
+    this.createdAt = Instant.now();
+  }
 
   @PreUpdate
   private void onUpdate() {
     this.updatedAt = Instant.now();
   }
 
-  public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address,
-      UUID reservationId) {
+  public static Order create(UUID buyerId, List<OrderItem> orderItems, ShippingAddress address) {
     Order order = Order.builder()
         .buyerId(buyerId)
         .orderItems(orderItems)
         .shippingAddress(address)
-        .reservationId(reservationId)
         .orderSum(calculateOrderSum(orderItems))
         .createdAt(Instant.now())
         .updatedAt(Instant.now())
@@ -93,6 +95,9 @@ public class Order {
   }
 
   public void confirmPaidOrder() {
+    if (!this.orderStatus.equals(OrderStatus.PENDING)) {
+      throw new IllegalStateException("Order is already paid");
+    }
     this.orderStatus = OrderStatus.PAID;
   }
 

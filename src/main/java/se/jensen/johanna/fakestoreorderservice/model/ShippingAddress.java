@@ -21,7 +21,6 @@ public class ShippingAddress {
 
   private String streetName;
 
-
   private String streetName2;
 
   @Pattern(regexp = "\\d{5}")
