@@ -30,13 +30,13 @@ public class PaymentService {
   @Value("${stripe.cancel-url}")
   private String stripeCancelUrl;
 
-  @Value("${stripe.webhook-secret}")
-  private String webhookSecret;
+  /*@Value("${stripe.webhook-secret}")
+  private String webhookSecret;*/
 
   @PostConstruct
   public void init() {
     Stripe.apiKey = stripeApiKey;
-    log.info("Loaded webhook secret: {}", webhookSecret);
+    log.info("Stripe API initialized for creating checkout sessions.");
   }
 
   @Transactional
