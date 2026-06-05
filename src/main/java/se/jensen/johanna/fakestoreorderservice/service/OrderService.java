@@ -136,9 +136,7 @@ public class OrderService {
    */
   public void handlePaidOrder(StripeEventDTO stripeEvent) {
     String stripeSessionId = stripeEvent.detail().data().stripeObject().sessionId();
-    UUID orderId = UUID.fromString(stripeEvent.detail().data().stripeObject().metadata().orderId());
-    log.info("Handling paid order: {} stripe session: {}",
-        orderId,
+    log.info("Handling paid order. stripe session: {}",
         stripeSessionId);
     Order order = orderRepository.findByStripeSessionId(stripeSessionId).orElseThrow(() -> {
       log.error("Order for stripe session id: {} not found",
@@ -150,8 +148,8 @@ public class OrderService {
     log.info("Order {} confirmed paid", order.getOrderId());
 
     log.info("Begin to publish confirm reservation event. OrderId: {} ",
-        orderId);
-    orderEventPublisher.publishConfirmReservationEvent(orderId);
+        order.getOrderId());
+    orderEventPublisher.publishConfirmReservationEvent(order.getOrderId());
   }
 
 
