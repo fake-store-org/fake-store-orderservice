@@ -11,6 +11,7 @@ public interface OrderItemMapper {
   @Mapping(target = "order", ignore = true)
   @Mapping(target = "pricePerItem", source = "productDTO.price")
   @Mapping(target = "quantity", source = "quantity")
+  @Mapping(target = "orderItemId", ignore = true)
   OrderItem toOrderItem(ProductDTO productDTO, Integer quantity);
 
 
