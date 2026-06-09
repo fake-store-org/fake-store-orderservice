@@ -30,9 +30,6 @@ public class PaymentService {
   @Value("${stripe.cancel-url}")
   private String stripeCancelUrl;
 
-  /*@Value("${stripe.webhook-secret}")
-  private String webhookSecret;*/
-
   @PostConstruct
   public void init() {
     Stripe.apiKey = stripeApiKey;

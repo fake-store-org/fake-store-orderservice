@@ -34,7 +34,6 @@ import se.jensen.johanna.fakestoreorderservice.dto.ProductBatchResponse;
 import se.jensen.johanna.fakestoreorderservice.dto.ProductDTO;
 import se.jensen.johanna.fakestoreorderservice.mapper.AddressMapper;
 import se.jensen.johanna.fakestoreorderservice.mapper.OrderItemMapper;
-import se.jensen.johanna.fakestoreorderservice.mapper.OrderMapper;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 import se.jensen.johanna.fakestoreorderservice.model.ShippingAddress;
@@ -47,8 +46,7 @@ class OrderServiceTest {
   private OrderService orderService;
   @Mock
   private OrderRepository orderRepository;
-  @Mock
-  private OrderMapper orderMapper;
+
   @Mock
   private PaymentService paymentService;
   @Mock
