@@ -5,7 +5,7 @@ import java.util.Set;
 import java.util.UUID;
 
 public record ReservationRequest(
-    @NotNull(message = "Please add items to cart.")
+    @NotNull
     Set<CartItemRequest> cartItemRequests,
     @NotNull
     UUID orderId

@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import se.jensen.johanna.fakestoreorderservice.dto.CartItemRequest;
@@ -134,6 +135,7 @@ public class OrderService {
    * Triggered by SQS listener. Marks order as PAID and publishes event to confirm reservation in
    * inventory.
    */
+  @Transactional
   public void handlePaidOrder(StripeEventDTO stripeEvent) {
     String stripeSessionId = stripeEvent.detail().data().stripeObject().sessionId();
     log.info("Handling paid order. stripe session: {}",
