@@ -1,6 +1,6 @@
 package se.jensen.johanna.fakestoreorderservice.service;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -57,32 +56,19 @@ class OrderServiceTest {
   private RestTemplate restTemplate;
 
   private Jwt jwt;
-  private Set<CartItemRequest> itemRequests;
-  private List<OrderItem> orderItems;
 
 
   @BeforeEach
   void setUp() {
-    UUID userId = UUID.randomUUID();
+
     jwt = mock(Jwt.class);
 
-    orderItems = new java.util.ArrayList<>();
-    OrderItem orderItem = OrderItem.builder().orderItemId(UUID.randomUUID())
-        .order(mock(Order.class)).pricePerItem(
-            BigDecimal.valueOf(100)).quantity(1).title("title").build();
-    OrderItem orderItem2 = OrderItem.builder().orderItemId(UUID.randomUUID())
-        .order(mock(Order.class)).pricePerItem(
-            BigDecimal.valueOf(100)).quantity(1).title("title2").build();
-    orderItems.add(orderItem);
-    orderItems.add(orderItem2);
-    itemRequests = new HashSet<>();
-    itemRequests.add(new CartItemRequest(UUID.randomUUID(), 1));
-    itemRequests.add(new CartItemRequest(UUID.randomUUID(), 2));
+
   }
 
 
   @Test
-  void putOrder_ShouldSuccessfullyPutOrderAndSave2() {
+  void putOrder_ShouldSuccessfullyPutOrderAndSave() {
     UUID sharedProductId = UUID.randomUUID();
     UUID buyerId = UUID.randomUUID();
 
@@ -119,16 +105,10 @@ class OrderServiceTest {
     when(paymentService.createCheckoutSession(any(Order.class), anyString()))
         .thenReturn(new CheckoutResponse("http://url", "123"));
 
-    assertDoesNotThrow(() -> orderService.putOrder(jwt, request));
+    CheckoutResponse result = orderService.putOrder(jwt, request);
+    assertThat(result.stripeUrl()).isEqualTo("http://url");
     verify(orderRepository, times(1)).save(any(Order.class));
   }
 
 
-  @Test
-  void reserveOrderItems() {
-  }
-
-  @Test
-  void getOrderItems() {
-  }
 }

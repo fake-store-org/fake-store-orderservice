@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import se.jensen.johanna.fakestoreorderservice.dto.CheckoutResponse;
-import se.jensen.johanna.fakestoreorderservice.exception.PaymentException;
+import se.jensen.johanna.fakestoreorderservice.exception.CheckoutException;
 import se.jensen.johanna.fakestoreorderservice.model.Order;
 import se.jensen.johanna.fakestoreorderservice.model.OrderItem;
 
@@ -55,7 +55,7 @@ public class PaymentService {
     } catch (StripeException e) {
       log.error("Error creating checkout session for order {} {}, {}", order.getOrderId(), e,
           e.getMessage());
-      throw new PaymentException("Unable to process payment.");
+      throw new CheckoutException("Unable to process payment.");
     }
 
   }
@@ -65,7 +65,7 @@ public class PaymentService {
     for (OrderItem item : orderItems) {
       SessionCreateParams.LineItem lineItem = SessionCreateParams.LineItem.builder()
           .setQuantity(item.getQuantity().longValue()).setPriceData(
-              SessionCreateParams.LineItem.PriceData.builder().setCurrency("sek").setUnitAmount(
+              SessionCreateParams.LineItem.PriceData.builder().setCurrency("usd").setUnitAmount(
                       item.getPricePerItem().multiply(BigDecimal.valueOf(100)).longValue())
                   .setProductData(SessionCreateParams.LineItem.PriceData.ProductData.builder()
                       .setName(item.getTitle()).build()).build()).build();
@@ -74,7 +74,7 @@ public class PaymentService {
     }
     if (lineItems.isEmpty()) {
       log.error("Error creating checkout session. No line items found.");
-      throw new PaymentException("Unable to process payment.");
+      throw new CheckoutException("Unable to process payment.");
     }
     return lineItems;
   }
